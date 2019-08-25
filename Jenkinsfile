@@ -1,25 +1,33 @@
 podTemplate(
-    label: 'mypod', 
+    label: 'mymaven',
     inheritFrom: 'default',
     containers: [
-        containerTemplate(
-            name: 'golang', 
-            image: 'golang:1.10-alpine',
-            ttyEnabled: true,
-            command: 'cat'
-        )
-    ]
-) {
-    node('mypod') {
-        def commitId
-        stage ('Extract') {
-            checkout scm
-            commitId = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
-        }
-        stage ('Build') {
-            container ('golang') {
-                sh 'CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main .'
+    containerTemplate(name: 'maven', image: 'maven:3.3.9-jdk-8-alpine', ttyEnabled: true, command: 'cat'),
+    containerTemplate(name: 'golang', image: 'golang:1.8.0', ttyEnabled: true, command: 'cat')
+  ]) {
+
+    node(mymaven) {
+        stage('Get a Maven project') {
+            git 'https://github.com/jenkinsci/kubernetes-plugin.git'
+            container('maven') {
+                stage('Build a Maven project') {
+                    sh 'mvn -B clean install'
+                }
             }
         }
+
+        stage('Get a Golang project') {
+            git url: 'https://github.com/hashicorp/terraform.git'
+            container('golang') {
+                stage('Build a Go project') {
+                    sh """
+                    mkdir -p /go/src/github.com/hashicorp
+                    ln -s `pwd` /go/src/github.com/hashicorp/terraform
+                    cd /go/src/github.com/hashicorp/terraform && make core-dev
+                    """
+                }
+            }
+        }
+
     }
 }
